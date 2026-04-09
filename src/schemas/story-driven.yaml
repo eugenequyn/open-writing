@@ -1,0 +1,83 @@
+name: story-driven
+version: "1.0"
+phases:
+  - id: builder
+    name: "创作宪法"
+    order: 1
+  - id: plot
+    name: "情节架构"
+    order: 2
+  - id: write
+    name: "正文创作"
+    order: 3
+  - id: style
+    name: "风格分析"
+    order: 4
+
+artifacts:
+  # ── Builder ──
+  - id: core_idea
+    phase: builder
+    path: "{{paths.core_idea}}"
+    dependencies: []
+    required: true
+
+  - id: world
+    phase: builder
+    path: "{{paths.world_file}}"
+    dependencies: [core_idea]
+    required: true
+
+  - id: characters
+    phase: builder
+    path: "{{paths.characters_file}}"
+    dependencies: [world]
+    required: true
+
+  - id: style
+    phase: builder
+    path: "{{paths.style}}"
+    dependencies: []
+    required: false
+
+  - id: plot_intent
+    phase: builder
+    path: "{{paths.plot_intent}}"
+    dependencies: [world, characters, style]
+    required: true
+
+  # ── Plot ──
+  - id: master_outline
+    phase: plot
+    path: "{{paths.master_outline}}"
+    dependencies: [plot_intent]
+    required: true
+
+  - id: volume_outlines
+    phase: plot
+    path_pattern: "{{paths.volume_outline}}"
+    is_collection: true
+    dependencies: [master_outline]
+    required: true
+
+  - id: chapter_outlines
+    phase: plot
+    path_pattern: "{{paths.chapter_outline}}"
+    is_collection: true
+    dependencies: [volume_outlines]
+    required: false
+
+  # ── Write ──
+  - id: chapter_drafts
+    phase: write
+    path_pattern: "{{paths.chapter_draft}}"
+    is_collection: true
+    dependencies: [chapter_outlines]
+    required: false
+
+  # ── Style ──
+  - id: author_profile
+    phase: style
+    path: "{{paths.author_profile}}"
+    dependencies: [chapter_drafts]
+    required: false

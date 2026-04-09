@@ -1,0 +1,121 @@
+# Agent 详细说明
+
+## 概述
+
+Builder 阶段使用两种 agent 来并行生成方案，通过 PK 辩论选优。
+
+---
+
+## World Builder Agent
+
+### 职责
+基于核心创意生成世界观设定方案。
+
+### 配置
+- **数量**：{{cfg "agents.world-builder.count"}} 个
+- **PK 轮数**：{{cfg "agents.world-builder.pk_rounds"}} 轮
+
+### 输入
+- `core_idea.md` 的关键信息（提取要点，非全文）
+
+### 输出
+- 世界观方案（包含：世界背景、能力体系、势力分布、关键地点、社会结构）
+
+### PK 辩论规则
+
+```
+第 1 轮：各方案独立展示
+- 每个 agent 展示方案摘要（200 字以内）
+- 不评价其他方案
+
+第 2 轮：相互质疑
+- 每个 agent 指出其他方案的弱点
+- 不得使用人身攻击或主观贬低
+- 质疑需有具体依据
+
+第 3 轮：改进回应
+- 每个 agent 回应质疑，改进自身方案
+- 可以采纳其他方案的优点
+
+最终：综合评分
+- 从创意性、完整性、可操作性、与核心创意契合度四个维度评分
+- 选出综合得分最高的方案
+```
+
+### 启动方式
+
+```python
+# 使用 Agent tool 启动
+Agent(
+  subagent_type="general-purpose",
+  prompt="你是一个世界观设计师。基于以下核心创意，生成一个世界观设定方案...",
+  name="world-builder-1"
+)
+```
+
+---
+
+## Character Arch Agent
+
+### 职责
+基于世界观设定生成角色档案。
+
+### 配置
+- **数量**：{{cfg "agents.character-arch.count"}} 个
+- **PK 轮数**：{{cfg "agents.character-arch.pk_rounds"}} 轮
+
+### 输入
+- `world/{{cfg "versioning.initial_version"}}.md` 的关键信息
+- `core_idea.md` 的核心冲突信息
+
+### 输出
+- 角色档案（包含：主角、主要配角、反派、关键配角）
+
+### PK 辩论规则
+
+与 World Builder 相同的 3 轮制辩论流程。
+
+### 启动方式
+
+```python
+Agent(
+  subagent_type="general-purpose",
+  prompt="你是一个角色设计师。基于以下世界观设定，生成角色档案...",
+  name="character-arch-1"
+)
+```
+
+---
+
+## Agent 协调原则
+
+### 上下文管理
+- 每个 agent 有独立上下文
+- 只传递必要信息（提取要点，不传全文）
+- 控制每个 agent 的输入在 500 字以内
+
+### 并行调度
+- 所有同类型 agent 同时启动
+- 使用 Agent tool 的并行启动能力
+- 等待所有 agent 完成后汇总
+
+### 信息提取示例
+
+**传递给 world-builder agent 的信息格式**：
+
+```
+【核心创意要点】
+- 主题：[一句话描述]
+- 类型：[类型/子类型]
+- 核心冲突：[一句话描述]
+- 关键设定：[2-3 个关键设定]
+- 目标读者：[目标读者群体]
+```
+
+### 结果汇总
+
+PK 结束后：
+1. 整理各方案摘要
+2. 展示对比表格
+3. 给出推荐方案及理由
+4. 等待用户确认

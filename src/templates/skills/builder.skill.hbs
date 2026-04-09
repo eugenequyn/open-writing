@@ -1,0 +1,276 @@
+---
+name: builder
+description: "小说创作建筑师阶段 - 从零构建创作宪法（世界观、角色、情节意向）。使用场景：(1) 首次创建小说项目时 (2) 开始新小说项目 (3) 需要架构级重建时。架构级重建请使用 /builder --rebuild，情节架构请使用 /plot"
+disable-model-invocation: true
+---
+
+# Builder Skill - 小说创作建筑师阶段
+
+从零构建小说创作的"创作宪法"，包括世界观设定、角色档案和情节意向书。
+
+> **注意**：Builder Skill 专注于世界观和角色构建。情节架构请使用 `/plot` 命令。
+
+## 快速开始
+
+```bash
+/builder
+```
+
+按照提示完成：
+1. 创意收集（使用 brainstorming skill）
+2. 世界观方案确认
+3. 角色档案确认
+4. 文风信息采集
+5. 情节意向书确认
+
+## 感知阶段（首要步骤）
+
+**在开始任何创作之前，你必须先读取以下文件理解创作上下文：**
+
+1. `core_idea.md` - 核心创意（必需）
+2. `author_profile.md` - 作家档案（如存在）→ 提取作者风格偏好
+3. `style.md` - 本书风格（如存在）→ 提取叙事约束
+
+**感知输出**：读取后，先输出一个 100-200 字的"创作上下文摘要"，包括：
+- 核心创意（一句话）
+- 作者风格标签（如：#低魔 #暗黑风 #群像）
+- 本书特殊约束（如：不使用第一人称）
+
+**等待用户确认后再继续**。用户确认后可以回复"继续"或"开始"。
+
+---
+
+## 工作流程
+
+### 阶段 1：创意收集
+- 使用 brainstorming skill 与用户对话
+- 收集：主题、类型、核心冲突、目标读者、关键设定
+- 输出：`core_idea.md`
+
+### 阶段 2：世界观构建
+- 启动 {{cfg "agents.world-builder.count"}} 个 world-builder agents 并行
+- Agents 相互 PK 和辩论
+- 用户确认方案
+- 输出：`world/{{cfg "versioning.initial_version"}}.md`
+
+### 阶段 3：角色架构
+- 启动 {{cfg "agents.character-arch.count"}} 个 character-arch agents 并行
+- 基于 world/{{cfg "versioning.initial_version"}}.md 生成角色
+- Agents PK 选优
+- 用户确认
+- 输出：`characters/{{cfg "versioning.initial_version"}}.md`
+
+### 阶段 4：文风信息采集
+- 检查 `author_profile.md` 是否存在
+- 存在：读取并展示现有风格，询问是否沿用
+  - 用户选择"是"：复制 author_profile 风格到 `style.md`
+  - 用户选择"否"：进入文风采集问卷，生成新风格
+- 不存在：进入文风采集问卷，生成新风格
+- 输出：`style.md`（本书风格）
+
+### 阶段 5：情节意向书
+- 基于 core_idea.md、world/{{cfg "versioning.initial_version"}}.md、characters/{{cfg "versioning.initial_version"}}.md、style.md
+- 生成轻量级情节意向
+- 用户确认
+- 输出：`plot_intent.md`
+
+### 阶段 6：冻结版本
+- 全局一致性检查
+- 用户确认后冻结版本 v1.0-stable
+- 更新 `logs/manifest.md`
+
+## Agent 协调
+
+### 上下文注入策略
+
+当上下文窗口受限时，按以下优先级注入：
+
+**P0（必须）**:
+- `core_idea.md` 全文（<500 字）
+- `style.md` 风格标签部分
+
+**P1（推荐）**:
+- 当前任务相关的设定摘要（如世界观摘要、角色档案摘要）
+
+**P2（可选）**:
+- 详细设定全文（如 `world/v1.0.md` 全文、其他角色档案）
+
+**截断规则**：估计 token 超过 7000 时，停止注入 P2 内容。
+
+**Token 估算公式**：`中文字数 × 1.5 + 英文单词数 + 标点符号数 = 估算 token 数`
+
+---
+
+### 编排器模式（世界观构建）
+
+**不要直接生成完整世界观。按以下步骤编排：**
+
+1. **拆解任务为 4 个子领域**：
+   - 地理环境（城市、地形、气候）
+   - 历史背景（重大事件、时间线）
+   - 力量体系（规则、等级、代价）
+   - 势力分布（组织、阵营、关系）
+
+2. **为每个子领域启动一个专家 Agent**：
+
+   ```
+   Agent(
+     subagent_type="general-purpose",
+     prompt="你是地理专家。基于核心创意 {{core_idea}}，生成世界观的地理环境部分，包括：地形地貌、气候特征、关键地点（至少 5 个）。",
+     name="geo-expert"
+   )
+
+   Agent(
+     subagent_type="general-purpose",
+     prompt="你是历史专家。基于核心创意 {{core_idea}}，生成世界观的历史背景，包括：重大历史事件、时间线、传说与神话。",
+     name="history-expert"
+   )
+
+   Agent(
+     subagent_type="general-purpose",
+     prompt="你是力量体系专家。基于核心创意 {{core_idea}}，生成世界观的力量体系，包括：规则、等级划分、使用限制、代价。",
+     name="power-system-expert"
+   )
+
+   Agent(
+     subagent_type="general-purpose",
+     prompt="你是势力分布专家。基于核心创意 {{core_idea}}，生成世界观的势力分布，包括：至少 3 个势力/组织、阵营关系、利益冲突。",
+     name="faction-expert"
+   )
+   ```
+
+3. **等待所有专家 Agent 完成后，合成最终方案**
+
+4. **启动一致性检查 Agent**：
+
+   ```
+   Agent(
+     subagent_type="general-purpose",
+     prompt="检查合成后的世界观是否与作者档案 (author_profile.md) 和本书风格 (style.md) 一致。重点关注：风格偏好、叙事约束、主题一致性。",
+     name="consistency-checker"
+   )
+   ```
+
+5. **展示最终方案，用户确认后生成 `world/{{cfg "versioning.initial_version"}}.md`**
+
+---
+
+### 编排器模式（角色构建）
+
+**角色构建同样采用编排器模式：**
+
+1. **拆解任务为 4 个子领域**：
+   - 主角团（动机、目标、内部冲突）
+   - 反派阵营（动机、理念、组织）
+   - 配角网络（关系、作用、成长）
+   - 角色关系图（互动、冲突、情感线）
+
+2. **为每个子领域启动一个专家 Agent**
+
+3. **等待所有专家 Agent 完成后，合成最终方案**
+
+4. **启动一致性检查 Agent**（检查角色与世界观的一致性）
+
+5. **展示最终方案，用户确认后生成 `characters/{{cfg "versioning.initial_version"}}.md`**
+
+---
+
+使用 `Agent` tool 启动并行 agents：
+
+```python
+# 启动 {{cfg "agents.world-builder.count"}} 个 world-builder agents
+Agent(subagent_type="world-builder", prompt=f"基于 {core_idea} 生成世界观方案", name="world-builder-1")
+# 同时启动 world-builder-2, world-builder-{{cfg "agents.world-builder.count"}}
+```
+
+**关键原则**：
+- 每个 agent 有独立上下文
+- 只传递必要信息（如 core_idea 关键内容）
+- 避免传递完整文件
+- 优先使用编排器模式拆解任务
+
+## 重建模式
+
+```bash
+/builder --rebuild world    # 重建世界观
+/builder --rebuild character # 重建角色
+/builder --reset             # 完全重建
+```
+
+重建流程：
+1. 确认重建意图
+2. 备份当前版本到 `archives/`
+3. 启动 agent team 重建
+4. 检查依赖影响
+5. 更新版本号（Major +1）
+
+> **注意**：`--rebuild plot` 已移除，情节架构重建请使用 `/plot --rebuild`
+
+## 用户介入点（标准模式：5 个）
+
+1. **创意输入**：brainstorming 对话收集核心创意
+2. **世界观确认**：展示世界观摘要，用户确认
+3. **角色档案确认**：展示主要角色档案，用户确认
+4. **文风确认**：展示本书风格设定，用户确认
+5. **情节意向确认**：展示情节意向书，用户确认
+
+## 一致性检查
+
+执行全局检查：
+- 世界观一致性（规则、势力、历史）
+- 角色一致性（动机、能力、关系）
+- 情节意向与世界观/角色的一致性
+- 风格一致性与本书风格设定的匹配度
+
+详见 references/consistency-check.md
+
+## 输出文件
+
+```
+core_idea.md                  # 核心创意
+world/{{cfg "versioning.initial_version}}.md                 # 世界观设定
+characters/{{cfg "versioning.initial_version}}.md            # 角色档案
+style.md                      # 本书风格
+plot_intent.md                # 情节意向书
+logs/manifest.md              # 版本记录
+```
+
+> **注意**：`outlines/master_outline.md` 和 `chapter_breakdown/` 已移至 `/plot` 命令输出。
+
+## Builder vs Plot vs Write
+
+| 场景 | 使用工具 |
+|------|---------|
+| 首次创建项目（世界观 + 角色） | Builder |
+| 架构级重建（世界观/角色） | Builder --rebuild |
+| 情节架构（大纲 + 细纲） | Plot |
+| 写作 | Write |
+| 日常修改（直接编辑文件） | 直接编辑 world/、characters/ 目录下的文件 |
+
+## 常见问题
+
+**Q: Builder 和 Plot 有什么区别？**
+A: Builder 负责世界观和角色构建，Plot 负责情节架构（大纲 + 细纲）。
+
+**Q: 重建会覆盖文件吗？**
+A: 会，但重建前会自动备份到 `archives/` 目录。
+
+**Q: 如何查看历史版本？**
+A: 历史版本在各模块的 `archives/` 目录，版本记录在 `logs/manifest.md`。
+
+**Q: 情节架构在哪里？**
+A: 情节架构已移至 `/plot` 命令，在 Builder 完成后运行。
+
+**Q: 文风档案有什么用？**
+A: `author_profile.md` 记录你的个人写作风格，跨越多本书演进。`style.md` 是本书的风格设定，可以继承自作家档案或独立设计。
+
+**Q: 如何更新作家风格档案？**
+A: 小说完成后运行 `/style` 命令，自动分析正文并更新 `author_profile.md`。
+
+## 详细文档
+
+- **完整工作流程**：references/workflow.md
+- **Agent 详细说明**：references/agents.md
+- **输出模板**：references/output-templates.md
+- **一致性检查清单**：references/consistency-check.md
+- **情节意向书模板**：references/plot-intent-template.md
